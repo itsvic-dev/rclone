@@ -60,6 +60,10 @@ func NewFs(ctx context.Context, name, root string, m configmap.Mapper) (fs.Fs, e
 
 	client := fshttp.NewClient(ctx)
 
+	if root != "" && !strings.HasSuffix(root, "/") {
+		root += "/"
+	}
+
 	f := &Fs{
 		name: name,
 		root: root,
@@ -86,7 +90,8 @@ func (f *Fs) String() string {
 // Features returns the optional features of this Fs
 func (f *Fs) Features() *fs.Features {
 	return &fs.Features{
-		CaseInsensitive: true,
+		CaseInsensitive:         true,
+		CanHaveEmptyDirectories: true,
 	}
 }
 
@@ -126,12 +131,31 @@ func (f *Fs) List(ctx context.Context, dir string) (entries fs.DirEntries, err e
 // immediately.
 func (f *Fs) ListP(ctx context.Context, dir string, callback fs.ListRCallback) error {
 	// add slash suffix for file search if dir isn't root
-	if dir != "" {
+	if dir != "" && !strings.HasSuffix(dir, "/") {
 		dir += "/"
 	}
+
+	// change root
+	dir = f.root + dir
+	fs.Debugf("ListP", "resolved dir=%q", dir)
+
 	list := list.NewHelper(callback)
 	_, err := f.listAll(ctx, func(item *api.FileInfo) bool {
-		if strings.HasPrefix(item.Path, dir) {
+		if strings.HasSuffix(item.Path, "/.directory") && !strings.ContainsAny(strings.TrimSuffix(strings.TrimPrefix(item.Path, dir), "/.directory"), "/") {
+			remote := strings.TrimPrefix(item.Path, f.root)
+			remote = strings.TrimSuffix(remote, "/.directory")
+			fs.Debugf("ListP", "remote=%q", remote)
+			// ignore this directory's dir marker
+			if remote+"/" == dir {
+				return false
+			}
+			if remote == ".directory" {
+				return false
+			}
+			d := fs.NewDir(remote, item.CreatedAt)
+			list.Add(d)
+		}
+		if strings.HasPrefix(item.Path, dir) && !strings.ContainsAny(strings.TrimPrefix(item.Path, dir), "/") {
 			list.Add(f.itemToObject(item))
 		}
 		return false
@@ -192,9 +216,11 @@ func (f *Fs) listAll(ctx context.Context, fn listAllFn) (found bool, err error) 
 }
 
 func (f *Fs) itemToObject(item *api.FileInfo) fs.Object {
+	remote := strings.TrimPrefix(item.Path, f.root)
+	fs.Debugf("itemToObject", "remote=%q", remote)
 	o := &Object{
 		fs:      f,
-		remote:  item.Path,
+		remote:  remote,
 		size:    item.Size,
 		modTime: item.CreatedAt,
 	}
