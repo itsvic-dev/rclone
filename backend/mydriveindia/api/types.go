@@ -22,3 +22,11 @@ type FileInfo struct {
 type FilesResponse struct {
 	Files []FileInfo `json:"files"`
 }
+
+type CreateFolderRequest struct {
+	Path string `json:"path"`
+}
+
+type CreateFileResponse struct {
+	File FileInfo `json:"file"`
+}

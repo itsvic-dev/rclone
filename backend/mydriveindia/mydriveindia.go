@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -167,8 +168,22 @@ func (f *Fs) ListP(ctx context.Context, dir string, callback fs.ListRCallback) e
 }
 
 func (f *Fs) Mkdir(ctx context.Context, dir string) error {
-	fs.Debug(dir, "Mkdir hit: TODO")
-	return fs.ErrorNotImplemented
+	var result api.CreateFileResponse
+	resolvedDir := dir
+	if f.root != "" {
+		resolvedDir = path.Join(f.root, dir)
+	}
+	fs.Debugf("Mkdir", "resolved dir=%q", resolvedDir)
+
+	opts := rest.Opts{
+		Method: "POST",
+		Path:   "files/directory",
+	}
+	mkdir := &api.CreateFolderRequest{
+		Path: resolvedDir,
+	}
+	_, err := f.srv.CallJSON(ctx, &opts, &mkdir, &result)
+	return err
 }
 
 // NewObject finds the Object at remote.  If it can't be found it returns the error fs.ErrorObjectNotFound.
@@ -185,8 +200,16 @@ func (f *Fs) Put(ctx context.Context, in io.Reader, src fs.ObjectInfo, options .
 }
 
 func (f *Fs) Rmdir(ctx context.Context, dir string) error {
-	fs.Debug(dir, "Rmdir hit: TODO")
-	return fs.ErrorNotImplemented
+	resolvedDir := path.Join(dir, ".directory")
+	if f.root != "" {
+		resolvedDir = path.Join(f.root, resolvedDir)
+	}
+	opts := rest.Opts{
+		Method: "DELETE",
+		Path:   fmt.Sprintf("files/%s", resolvedDir),
+	}
+	_, err := f.srv.CallJSON(ctx, &opts, nil, nil)
+	return err
 }
 
 type listAllFn func(*api.FileInfo) bool
