@@ -40,10 +40,11 @@ type Options struct {
 }
 
 type Fs struct {
-	name  string
-	root  string
-	srv   *rest.Client
-	pacer *fs.Pacer
+	name     string
+	root     string
+	srv      *rest.Client
+	pacer    *fs.Pacer
+	features *fs.Features
 }
 
 type Object struct {
@@ -73,6 +74,10 @@ func NewFs(ctx context.Context, name, root string, m configmap.Mapper) (fs.Fs, e
 		srv:   rest.NewClient(client).SetRoot("https://drive.mypayindia.com/api/").SetHeader("Authorization", fmt.Sprintf("Bearer %s", opt.SessionID)),
 		pacer: fs.NewPacer(ctx, pacer.NewDefault()),
 	}
+	f.features = (&fs.Features{
+		CaseInsensitive:         true,
+		CanHaveEmptyDirectories: true,
+	}).Fill(ctx, f)
 	return f, nil
 }
 
@@ -93,10 +98,7 @@ func (f *Fs) String() string {
 
 // Features returns the optional features of this Fs
 func (f *Fs) Features() *fs.Features {
-	return &fs.Features{
-		CaseInsensitive:         true,
-		CanHaveEmptyDirectories: true,
-	}
+	return f.features
 }
 
 func (f *Fs) Precision() time.Duration {
@@ -258,6 +260,27 @@ func (f *Fs) Rmdir(ctx context.Context, dir string) error {
 	return err
 }
 
+func (f *Fs) About(ctx context.Context) (*fs.Usage, error) {
+	opts := rest.Opts{
+		Method: "GET",
+		Path:   "auth/me",
+	}
+
+	var result api.UserInfoResponse
+	_, err := f.srv.CallJSON(ctx, &opts, nil, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MDI user info: %w", err)
+	}
+
+	usage := &fs.Usage{
+		Total: fs.NewUsageValue(result.User.SpaceAvailable),
+		Used:  fs.NewUsageValue(result.User.SpaceUsed),
+		Free:  fs.NewUsageValue(result.User.SpaceAvailable - result.User.SpaceUsed),
+	}
+
+	return usage, nil
+}
+
 type listAllFn func(*api.FileInfo) bool
 
 // Returns all objects in the filesystem from the API.
@@ -388,6 +411,7 @@ func (o *Object) Remove(ctx context.Context) error {
 
 // Check the interfaces are satisfied
 var (
-	_ fs.Fs     = &Fs{}
-	_ fs.Object = &Object{}
+	_ fs.Fs      = &Fs{}
+	_ fs.Abouter = &Fs{}
+	_ fs.Object  = &Object{}
 )
