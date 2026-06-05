@@ -216,10 +216,7 @@ func (f *Fs) NewObject(ctx context.Context, remote string) (fs.Object, error) {
 func (f *Fs) Put(ctx context.Context, in io.Reader, src fs.ObjectInfo, options ...fs.OpenOption) (fs.Object, error) {
 	obj, err := f.NewObject(ctx, src.Remote())
 	if obj != nil {
-		err = obj.Remove(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to remove file during Put: %w", err)
-		}
+		obj.Remove(ctx)
 	}
 
 	values := url.Values{}
@@ -399,14 +396,18 @@ func (o *Object) Open(ctx context.Context, options ...fs.OpenOption) (io.ReadClo
 // But for unknown-sized objects (indicated by src.Size() == -1), Upload should either
 // return an error or update the object properly (rather than e.g. calling panic).
 func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, options ...fs.OpenOption) error {
-	fs.Debug("Update", "Update hit: TODO")
-	return fs.ErrorNotImplemented
+	_, err := o.fs.Put(ctx, in, src, options...)
+	return err
 }
 
 // Removes this object
 func (o *Object) Remove(ctx context.Context) error {
-	fs.Debug("Remove", "Remove hit: TODO")
-	return fs.ErrorNotImplemented
+	opts := rest.Opts{
+		Method: "DELETE",
+		Path:   fmt.Sprintf("files/%s", o.fs.resolveRemote(o.remote)),
+	}
+	_, err := o.fs.srv.Call(ctx, &opts)
+	return err
 }
 
 // Check the interfaces are satisfied
