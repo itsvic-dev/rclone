@@ -346,8 +346,9 @@ func (o *Object) Open(ctx context.Context, options ...fs.OpenOption) (io.ReadClo
 	}
 
 	opts = rest.Opts{
-		Method: "GET",
-		Path:   fmt.Sprintf("files/download_token/%s", result.DownloadToken),
+		Method:  "GET",
+		Path:    fmt.Sprintf("files/download_token/%s", result.DownloadToken),
+		Options: options,
 	}
 	resp, err := o.fs.srv.Call(ctx, &opts)
 	return resp.Body, err
