@@ -209,9 +209,24 @@ func (f *Fs) NewObject(ctx context.Context, remote string) (fs.Object, error) {
 
 // Put the object
 func (f *Fs) Put(ctx context.Context, in io.Reader, src fs.ObjectInfo, options ...fs.OpenOption) (fs.Object, error) {
-	// TODO: implement Put, make sure it deletes the object if it exists because MDI doesn't support in-place file updates
-	fs.Debug(src, "Put hit: TODO")
-	return nil, fs.ErrorNotImplemented
+	// TODO: make sure it deletes the object if it exists because MDI doesn't support in-place file updates
+	values := url.Values{}
+	values.Add("filepath", f.resolveRemote(src.Remote()))
+	opts := rest.Opts{
+		Method:               "POST",
+		Path:                 "files",
+		Body:                 in,
+		MultipartParams:      values,
+		MultipartContentName: "file",
+		MultipartContentType: "application/octet-stream",
+		MultipartFileName:    "file",
+	}
+	var result api.CreateFileResponse
+	_, err := f.srv.CallJSON(ctx, &opts, nil, result)
+	if err != nil {
+		return nil, err
+	}
+	return f.itemToObject(&result.File), err
 }
 
 func (f *Fs) Rmdir(ctx context.Context, dir string) error {
