@@ -30,3 +30,7 @@ type CreateFolderRequest struct {
 type CreateFileResponse struct {
 	File FileInfo `json:"file"`
 }
+
+type DownloadTokenResponse struct {
+	DownloadToken string `json:"download_token"`
+}

@@ -188,8 +188,23 @@ func (f *Fs) Mkdir(ctx context.Context, dir string) error {
 
 // NewObject finds the Object at remote.  If it can't be found it returns the error fs.ErrorObjectNotFound.
 func (f *Fs) NewObject(ctx context.Context, remote string) (fs.Object, error) {
-	fs.Debug(remote, "NewObject hit: TODO")
-	return nil, fs.ErrorNotImplemented
+	resolved := f.resolveRemote(remote)
+	var item *api.FileInfo
+	fs.Debugf("NewObject", "resolved=%q", resolved)
+	found, err := f.listAll(ctx, func(i *api.FileInfo) bool {
+		if i.Path == resolved {
+			item = i
+			return true
+		}
+		return false
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fs.ErrorObjectNotFound
+	}
+	return f.itemToObject(item), nil
 }
 
 // Put the object
@@ -250,6 +265,13 @@ func (f *Fs) itemToObject(item *api.FileInfo) fs.Object {
 	return o
 }
 
+func (f *Fs) resolveRemote(remote string) string {
+	if f.root != "" {
+		return path.Join(f.root, remote)
+	}
+	return remote
+}
+
 // Fs returns read only access to the Fs that this object is part of
 func (o *Object) Fs() fs.Info {
 	return o.fs
@@ -292,12 +314,28 @@ func (o *Object) Storable() bool {
 
 // SetModTime sets the metadata on the object to set the modification date
 func (o *Object) SetModTime(ctx context.Context, t time.Time) error {
+	fs.Debug("SetModTime", "SetModTime hit: TODO")
 	return fs.ErrorNotImplemented
 }
 
 // Open opens the file for read.  Call Close() on the returned io.ReadCloser
 func (o *Object) Open(ctx context.Context, options ...fs.OpenOption) (io.ReadCloser, error) {
-	return nil, fs.ErrorNotImplemented
+	var result api.DownloadTokenResponse
+	opts := rest.Opts{
+		Method: "GET",
+		Path:   fmt.Sprintf("files/download/%s", o.fs.resolveRemote(o.remote)),
+	}
+	_, err := o.fs.srv.CallJSON(ctx, &opts, nil, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	opts = rest.Opts{
+		Method: "GET",
+		Path:   fmt.Sprintf("files/download_token/%s", result.DownloadToken),
+	}
+	resp, err := o.fs.srv.Call(ctx, &opts)
+	return resp.Body, err
 }
 
 // Update in to the object with the modTime given of the given size
@@ -306,11 +344,13 @@ func (o *Object) Open(ctx context.Context, options ...fs.OpenOption) (io.ReadClo
 // But for unknown-sized objects (indicated by src.Size() == -1), Upload should either
 // return an error or update the object properly (rather than e.g. calling panic).
 func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, options ...fs.OpenOption) error {
+	fs.Debug("Update", "Update hit: TODO")
 	return fs.ErrorNotImplemented
 }
 
 // Removes this object
 func (o *Object) Remove(ctx context.Context) error {
+	fs.Debug("Remove", "Remove hit: TODO")
 	return fs.ErrorNotImplemented
 }
 
